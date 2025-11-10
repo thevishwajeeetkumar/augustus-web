@@ -3,6 +3,7 @@
 import * as React from "react";
 import { MessageList, type ChatMessage } from "./MessageList";
 import { MessageComposer } from "./MessageComposer";
+import { cn } from "@/lib/utils";
 
 type AgentResponse = {
   answer: string;
@@ -87,12 +88,43 @@ export function ChatPanel({ initialSessionId, videoId, initialMessages = [] }: P
   }
 
   return (
-    <div className="flex h-full flex-col gap-3">
-      <MessageList messages={messages} className="p-1" />
-      <MessageComposer disabled={busy} onSend={sendToAgent} />
-      {error ? <p className="text-xs text-red-500">{error}</p> : null}
-      <div className="text-[10px] text-white/40">
-        Video: {videoId} • Session: {sessionId}
+    <div className="relative flex h-full flex-col overflow-hidden rounded-3xl border border-white/12 bg-[#0b1120]/75 shadow-[0_26px_85px_rgba(12,18,45,0.55)]">
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(95,139,255,0.18),transparent_55%),radial-gradient(circle_at_bottom,rgba(154,77,255,0.16),transparent_60%)]" />
+      <div className="relative z-10 flex h-full flex-col">
+        <div className="flex items-center justify-between border-b border-white/12 px-6 py-4">
+          <div>
+            <p className="text-[11px] uppercase tracking-[0.25em] text-white/45">
+              Active session
+            </p>
+            <div className="mt-1 flex items-center gap-2 text-sm text-white">
+              <span className="rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs text-white/75">
+                Video {videoId}
+              </span>
+              <span className="text-xs text-white/45">Session {sessionId.slice(0, 8)}…</span>
+            </div>
+          </div>
+          <div
+            className={cn(
+              "rounded-full border px-3 py-1 text-[11px] uppercase tracking-wide",
+              busy
+                ? "border-amber-500/40 bg-amber-500/15 text-amber-200"
+                : "border-emerald-500/35 bg-emerald-500/12 text-emerald-200"
+            )}
+          >
+            {busy ? "Thinking…" : "Ready"}
+          </div>
+        </div>
+        <div className="flex h-full flex-col gap-4 px-5 py-5">
+          <MessageList messages={messages} />
+          <div className="space-y-3">
+            <MessageComposer disabled={busy} onSend={sendToAgent} />
+            {error ? (
+              <div className="flex items-center rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs text-red-200">
+                {error}
+              </div>
+            ) : null}
+          </div>
+        </div>
       </div>
     </div>
   );

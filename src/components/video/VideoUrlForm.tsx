@@ -63,29 +63,46 @@ export function VideoUrlForm({ initialQuery = "Analyze this video", onSuccess }:
   }
 
   return (
-    <form onSubmit={onSubmit} className="space-y-4">
-      <div className="space-y-2">
-        <Label htmlFor="videoUrl">YouTube URL</Label>
-        <Input
-          id="videoUrl"
-          name="videoUrl"
-          placeholder="https://www.youtube.com/watch?v=..."
-          value={url}
-          onChange={(e) => setUrl(e.target.value)}
+    <form
+      onSubmit={onSubmit}
+      className="relative overflow-hidden rounded-3xl border border-white/10 bg-[#0b1120]/70 p-6 shadow-[0_20px_65px_rgba(15,23,42,0.6)] backdrop-blur"
+    >
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(95,139,255,0.15),transparent_60%)]" />
+      <div className="relative z-10 space-y-5">
+        <div>
+          <Label htmlFor="videoUrl" className="text-xs uppercase tracking-[0.2em] text-white/60">
+            YouTube URL
+          </Label>
+          <Input
+            id="videoUrl"
+            name="videoUrl"
+            placeholder="https://www.youtube.com/watch?v=..."
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            disabled={loading}
+            required
+            className="mt-2 h-12 rounded-2xl border-white/10 bg-[#101a32]/70 px-4 text-sm text-white placeholder:text-white/40 focus-visible:border-white/40"
+          />
+        </div>
+
+        {error ? (
+          <div className="rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200" role="alert">
+            {error}
+          </div>
+        ) : (
+          <p className="text-xs text-white/50">
+            Paste any YouTube link. We’ll fetch the transcript, translate, chunk, and embed it automatically.
+          </p>
+        )}
+
+        <Button
+          type="submit"
+          className="w-full rounded-full bg-linear-to-br from-[#5f8bff] via-[#7c5dff] to-[#9a4dff] py-2.5 text-white shadow-[0_18px_45px_rgba(100,149,255,0.45)] hover:-translate-y-0.5 transition disabled:opacity-50"
           disabled={loading}
-          required
-        />
+        >
+          {loading ? "Processing…" : "Analyze video"}
+        </Button>
       </div>
-
-      {error ? (
-        <p className="text-sm text-red-600" role="alert">
-          {error}
-        </p>
-      ) : null}
-
-      <Button type="submit" className="rounded-full text-gray-900" disabled={loading}>
-        {loading ? "Processing…" : "Analyze video"}
-      </Button>
     </form>
   );
 }

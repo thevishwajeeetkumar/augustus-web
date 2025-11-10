@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { useAuth } from "@/app/hooks/useAuth";
 
 type LoginOk = { ok: true; token_type?: string; scopes?: string[] | string; exp?: number | null };
 type LoginErr = { error: string };
@@ -16,6 +17,7 @@ export function SignInForm({ next = "/app" }: { next?: string }) {
   const [password, setPassword] = React.useState("");
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  const { setStatus, refresh } = useAuth({ initialStatus: "unauthenticated" });
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -43,6 +45,8 @@ export function SignInForm({ next = "/app" }: { next?: string }) {
       }
 
       if ("ok" in data && data.ok) {
+        setStatus("authenticated");
+        await refresh();
         router.replace(next);
       } else {
         setError("Unexpected response. Please try again.");
