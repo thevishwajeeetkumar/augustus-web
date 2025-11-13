@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
+import { API_BASE } from "@/lib/config";
 
-const BACKEND = process.env.NEXT_PUBLIC_API_BASE!;
 const TOKEN_COOKIE = "augustus_token";
 
 type TokenResponse = {
@@ -8,6 +8,7 @@ type TokenResponse = {
   token_type?: string;
   scopes?: string[] | string;
   exp?: number; // epoch seconds (optional)
+  expires_in?: number; // seconds (optional)
 };
 
 export async function POST(req: Request) {
@@ -21,19 +22,23 @@ export async function POST(req: Request) {
       );
     }
 
-    // FastAPI's /token expects x-www-form-urlencoded
-    const body = new URLSearchParams();
-    body.set("username", username);
-    body.set("password", password);
-
-    const res = await fetch(`${BACKEND}/token`, {
+    // Use /signin endpoint with JSON (consistent with backend API docs)
+    const res = await fetch(`${API_BASE}/signin`, {
       method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body,
-      // Do not forward cookies here; login starts a session
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username, password }),
     });
 
-    const data = await res.json();
+    let data;
+    try {
+      data = await res.json();
+    } catch (parseErr) {
+      console.error("Failed to parse backend response:", parseErr);
+      return NextResponse.json(
+        { error: "Invalid response from backend." },
+        { status: 502 }
+      );
+    }
 
     if (!res.ok) {
       return NextResponse.json(
@@ -59,9 +64,11 @@ export async function POST(req: Request) {
       );
     }
 
-    // Derive cookie expiration if backend provided exp (epoch seconds)
+    // Derive cookie expiration from expires_in (seconds) or exp (epoch seconds)
     let expires: Date | undefined = undefined;
-    if (typeof tokenData.exp === "number" && tokenData.exp > 0) {
+    if (typeof tokenData.expires_in === "number" && tokenData.expires_in > 0) {
+      expires = new Date(Date.now() + tokenData.expires_in * 1000);
+    } else if (typeof tokenData.exp === "number" && tokenData.exp > 0) {
       expires = new Date(tokenData.exp * 1000);
     }
 
@@ -71,6 +78,7 @@ export async function POST(req: Request) {
         token_type: tokenData.token_type ?? "bearer",
         scopes: tokenData.scopes ?? [],
         exp: tokenData.exp ?? null,
+        expires_in: tokenData.expires_in ?? null,
       },
       { status: 200 }
     );
@@ -85,8 +93,9 @@ export async function POST(req: Request) {
 
     return response;
   } catch (err) {
+    console.error("Login route error:", err);
     return NextResponse.json(
-      { error: "Login failed. Please try again.", err },
+      { error: "Login failed. Please try again." },
       { status: 500 }
     );
   }

@@ -29,9 +29,7 @@ const MARKETING_NAV: readonly NavItem[] = [
 ];
 
 const APP_NAV: readonly NavItem[] = [
-  { label: "Dashboard", href: "/app" },
-  { label: "Videos", href: "/app/videos" },
-  { label: "Sessions", href: "/app/sessions" },
+  { label: "Query", href: "/app/query" },
   { label: "Health", href: "/app/health" },
 ];
 
@@ -103,7 +101,7 @@ export function AppHeader() {
                   variant="default"
                   className="rounded-full bg-linear-to-br from-[#5f8bff] via-[#7c5dff] to-[#9a4dff] px-5 py-2 text-white shadow-[0_12px_35px_rgba(100,149,255,0.45)] transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_20px_55px_rgba(100,149,255,0.6)] cursor-pointer"
                 >
-                  <Link href="/app/videos/new">New video</Link>
+                  <Link href="/app/query">Ask question</Link>
                 </Button>
                 <Button
                   variant="secondary"
@@ -202,7 +200,7 @@ export function AppHeader() {
                           asChild
                           className="rounded-full bg-linear-to-r from-[#5f8bff] via-[#7c5dff] to-[#9a4dff] px-5 py-2 text-white shadow-[0_14px_38px_rgba(100,149,255,0.45)] transition-all hover:-translate-y-0.5 hover:shadow-[0_20px_52px_rgba(100,149,255,0.55)]"
                         >
-                          <Link href="/app/videos/new">New video</Link>
+                          <Link href="/app/query">Ask question</Link>
                         </Button>
                         <Button
                           variant="secondary"

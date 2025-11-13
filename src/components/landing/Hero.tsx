@@ -48,7 +48,7 @@ export function Hero() {
                 variant="secondary"
                 className="rounded-full border border-white/20 bg-white/10 px-6 py-2.5 text-white transition duration-300 hover:-translate-y-0.5 hover:bg-white/18 hover:border-white/35"
               >
-                <Link href="/app/videos/new">New video</Link>
+                <Link href="/app/query">Ask question</Link>
               </Button>
             </>
           ) : (

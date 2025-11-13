@@ -4,6 +4,7 @@ import * as React from "react";
 import { MessageList, type ChatMessage } from "./MessageList";
 import { MessageComposer } from "./MessageComposer";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/app/hooks/useAuth";
 
 type AgentResponse = {
   answer: string;
@@ -19,6 +20,7 @@ type Props = {
 };
 
 export function ChatPanel({ initialSessionId, videoId, initialMessages = [] }: Props) {
+  const { signOut } = useAuth();
   const [sessionId, setSessionId] = React.useState(initialSessionId);
   const [messages, setMessages] = React.useState<ChatMessage[]>(initialMessages);
   const [busy, setBusy] = React.useState(false);
@@ -40,14 +42,55 @@ export function ChatPanel({ initialSessionId, videoId, initialMessages = [] }: P
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ query: prompt, session_id: sessionId }),
+        credentials: "include",
       });
 
-      const data = (await res.json()) as AgentResponse | { error: string };
+      const data = (await res.json()) as AgentResponse | { error: string; detail?: string };
 
-      if (!res.ok || "error" in data) {
-        const msg = "error" in data ? data.error : `Request failed (status ${res.status}).`;
+      if (!res.ok) {
+        // Handle 401 - session expired
+        if (res.status === 401) {
+          const msg = ("error" in data && data.error) || "Session expired. Please sign in again.";
+          setError(msg);
+          setMessages((m) => [
+            ...m,
+            {
+              id: `e_${Date.now()}`,
+              role: "ai",
+              content: `⚠️ ${msg}`,
+              createdAt: new Date().toISOString(),
+            },
+          ]);
+          // Redirect to sign-in after a delay
+          setTimeout(() => {
+            signOut();
+          }, 2000);
+          return;
+        }
+
+        // Handle other errors - backend uses {"detail": "message"} format
+        const msg = "detail" in data && data.detail 
+          ? data.detail 
+          : "error" in data && data.error 
+          ? data.error 
+          : `Request failed (status ${res.status}).`;
         setError(msg);
         // Show an inline AI error bubble for continuity
+        setMessages((m) => [
+          ...m,
+          {
+            id: `e_${Date.now()}`,
+            role: "ai",
+            content: `⚠️ ${msg}`,
+            createdAt: new Date().toISOString(),
+          },
+        ]);
+        return;
+      }
+
+      if ("error" in data) {
+        const msg = data.error;
+        setError(msg);
         setMessages((m) => [
           ...m,
           {

@@ -10,8 +10,8 @@ export function ContactSection() {
   const { status } = useAuth();
   const isAuthenticated = status === "authenticated";
   const demoHref = isAuthenticated
-    ? "/app/videos/new"
-    : "/auth/sign-in?next=%2Fapp%2Fvideos%2Fnew";
+    ? "/app/query"
+    : "/auth/sign-in?next=%2Fapp%2Fquery";
 
   return (
     <section

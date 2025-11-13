@@ -11,7 +11,7 @@ type LoginOk = { ok: true; token_type?: string; scopes?: string[] | string; exp?
 type LoginErr = { error: string };
 type LoginResponse = LoginOk | LoginErr;
 
-export function SignInForm({ next = "/app" }: { next?: string }) {
+export function SignInForm({ next = "/app/query" }: { next?: string }) {
   const router = useRouter();
   const [username, setUsername] = React.useState("");
   const [password, setPassword] = React.useState("");
@@ -34,6 +34,7 @@ export function SignInForm({ next = "/app" }: { next?: string }) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username, password }),
+        credentials: "include",
       });
 
       const data = (await res.json()) as LoginResponse;
@@ -51,13 +52,13 @@ export function SignInForm({ next = "/app" }: { next?: string }) {
       } else {
         setError("Unexpected response. Please try again.");
       }
-    } catch {
+    } catch (err) {
       setError("Network error. Please try again.");
+      console.error("Login error:", err);
     } finally {
       setLoading(false);
     }
   }
-
   return (
     <form onSubmit={onSubmit} className="space-y-4">
       <div className="space-y-2">

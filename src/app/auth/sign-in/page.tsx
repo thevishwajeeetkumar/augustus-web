@@ -11,7 +11,7 @@ import { BrandWordmark } from "@/components/common/BrandWordmark";
 
 function SignInPageContent() {
   const params = useSearchParams();
-  const next = params.get("next") || "/app";
+  const next = params.get("next") || "/app/query";
 
   return (
     <main className="relative min-h-screen overflow-hidden bg-[linear-gradient(120deg,#040916_0%,#07112b_55%,#0d1a3c_100%)] text-white">
