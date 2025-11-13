@@ -30,6 +30,7 @@ export function SignInForm({ next = "/app/query" }: { next?: string }) {
 
     setLoading(true);
     try {
+      // Use Next.js API route which proxies to backend /signin
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },

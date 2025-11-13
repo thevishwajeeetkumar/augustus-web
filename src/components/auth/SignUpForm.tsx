@@ -30,10 +30,12 @@ export function SignUpForm({ onSuccessRedirect = "/auth/sign-in" }: { onSuccessR
 
     setLoading(true);
     try {
+      // Use Next.js API route which proxies to backend /signup
       const res = await fetch("/api/auth/signup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username, email, password }),
+        credentials: "include",
       });
 
       const data = (await res.json()) as SignupResponse;
