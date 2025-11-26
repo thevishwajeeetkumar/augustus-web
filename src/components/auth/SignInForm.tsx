@@ -88,13 +88,11 @@ export function SignInForm({ next = "/app/query" }: { next?: string }) {
           required
         />
       </div>
-
       {error ? (
         <p className="text-sm text-red-600" role="alert">
           {error}
         </p>
       ) : null}
-
       <Button type="submit" className="w-full rounded-full" disabled={loading}>
         {loading ? "Signing in…" : "Sign in"}
       </Button>

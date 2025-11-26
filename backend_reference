@@ -1,0 +1,348 @@
+# Frontend Reference Guide - Augustus Chat Backend API
+
+> **Purpose**: Current backend API documentation for Next.js frontend implementation  
+> **Status**: Phase 1 complete - Chat endpoints only
+
+---
+
+## Authentication
+
+**Login Endpoint:**
+```
+POST /api/auth/login
+Content-Type: application/json
+
+{
+  "username": "string",
+  "password": "string"
+}
+```
+
+**Response:**
+```typescript
+{
+  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "token_type": "bearer",
+  "expires_in": 1800
+}
+```
+
+**All endpoints require:**
+```
+Authorization: Bearer <access_token>
+```
+
+**Required scope:** `write` (for chat endpoints)
+
+---
+
+## API Endpoints
+
+### 1. Chat with Video (Per-Video Tab)
+```
+POST /api/v2/chat/video
+```
+
+**Request Options:**
+
+**A. Start new conversation:**
+```typescript
+{
+  "video_url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+  "query": "What is this video about?"
+}
+// OR
+{
+  "video_id": "dQw4w9WgXcQ",
+  "query": "What is this video about?"
+}
+```
+
+**B. Continue existing conversation (RECOMMENDED):**
+```typescript
+{
+  "conversation_id": "550e8400-e29b-41d4-a716-446655440000",
+  "query": "Tell me more about that"
+}
+```
+
+**Response:**
+```typescript
+{
+  "conversation_id": "550e8400-e29b-41d4-a716-446655440000",  // ⚠️ STORE THIS!
+  "video_id": "dQw4w9WgXcQ",
+  "video_title": "Rick Astley - Never Gonna Give You Up",
+  "user_message": "What is this video about?",
+  "assistant_message": "This video is Rick Astley's...",
+  "message_index": 1,
+  "created_at": "2025-01-15T10:30:00.123456Z"
+}
+```
+
+**Status Codes:**
+- `200 OK` - Success
+- `400 Bad Request` - Invalid input, empty query, query too long (>2000 chars)
+- `401 Unauthorized` - Missing/invalid token
+- `403 Forbidden` - Missing `write` scope
+- `404 Not Found` - User or conversation not found
+- `503 Service Unavailable` - Pinecone not configured
+- `504 Gateway Timeout` - Agent timeout (>60s)
+
+---
+
+### 2. General Tab (Cross-Video Queries)
+```
+POST /api/v2/chat/general
+```
+
+**Request:**
+```typescript
+{
+  "conversation_id": "550e8400-e29b-41d4-a716-446655440000",  // Optional for new
+  "query": "Explain machine learning concepts from my videos"
+}
+```
+
+**Response:** Same format as `/api/v2/chat/video`
+
+**Note:** `video_id` in response will be `"GENERAL"`
+
+---
+
+### 3. Health Check
+```
+GET /health
+```
+
+No authentication required.
+
+---
+
+### 4. User Info
+```
+GET /me
+```
+
+**Response:**
+```typescript
+{
+  "username": "testuser",
+  "email": "test@example.com",
+  "created_at": "2025-01-10T10:00:00Z"
+}
+```
+
+---
+
+## Data Models
+
+### ConversationResponse
+```typescript
+interface ConversationResponse {
+  conversation_id: string;  // UUID - ⚠️ STORE THIS!
+  video_id: string;  // YouTube video ID (11 chars) or "GENERAL"
+  video_title: string;
+  user_message: string;
+  assistant_message: string;
+  message_index: number;  // Sequential: 0, 1, 2, ...
+  created_at: string;  // ISO 8601
+}
+```
+
+---
+
+## Critical Implementation Rules
+
+### 1. Always Store conversation_id
+
+**⚠️ CRITICAL:** Store `conversation_id` from first response and use it in all follow-up requests.
+
+```typescript
+// First message - get conversation_id
+const response = await fetch('/api/v2/chat/video', {
+  method: 'POST',
+  headers: {
+    'Authorization': `Bearer ${token}`,
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({
+    video_url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+    query: 'What is this video about?'
+  })
+});
+
+const data = await response.json();
+const conversationId = data.conversation_id;  // ⚠️ STORE THIS!
+
+// Subsequent messages - use conversation_id
+await fetch('/api/v2/chat/video', {
+  method: 'POST',
+  headers: {
+    'Authorization': `Bearer ${token}`,
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({
+    conversation_id: conversationId,  // Use stored ID
+    query: 'Tell me more'
+  })
+});
+```
+
+**Why?**
+- Each (user, video) pair has ONE conversation
+- Using `conversation_id` is faster (no lookup)
+- Ensures conversation continuity
+
+---
+
+### 2. Message Index
+
+- Messages are paired: user (even index) + assistant (odd index)
+- First turn: index 0 (user), 1 (assistant)
+- Second turn: index 2 (user), 3 (assistant)
+- Always sequential, 0-based
+
+---
+
+### 3. Video Switching
+
+When switching videos:
+1. Store `conversation_id` for current video
+2. Start new conversation with `video_url` or `video_id` for new video
+3. Backend automatically creates new conversation
+4. Store new `conversation_id`
+
+**Each video gets its own conversation.**
+
+---
+
+### 4. Query Limits
+
+- Maximum query length: **2000 characters**
+- Validate before sending request
+
+---
+
+## Error Handling
+
+```typescript
+try {
+  const response = await fetch('/api/v2/chat/video', { /* ... */ });
+  
+  if (!response.ok) {
+    const error = await response.json();
+    
+    if (response.status === 404 && error.detail.includes('Conversation not found')) {
+      // Start new conversation
+      return startNewConversation(videoId, query);
+    } else if (response.status === 401) {
+      // Redirect to login
+      redirectToLogin();
+    } else if (response.status === 503) {
+      // Service unavailable - show retry
+      showRetryOption();
+    } else {
+      showError(error.detail);
+    }
+    return;
+  }
+  
+  const data = await response.json();
+  // Store conversation_id
+  return data;
+} catch (error) {
+  // Network error
+  showNetworkError();
+}
+```
+
+---
+
+## Implementation Pattern
+
+```typescript
+interface ChatState {
+  conversationId: string | null;
+  videoId: string | null;
+  messages: Array<{ role: 'user' | 'assistant', content: string, message_index: number }>;
+}
+
+async function sendMessage(query: string, videoId?: string, videoUrl?: string) {
+  const body: any = { query };
+  
+  // Priority: conversation_id > video_id > video_url
+  if (chatState.conversationId) {
+    body.conversation_id = chatState.conversationId;
+  } else if (videoId) {
+    body.video_id = videoId;
+  } else if (videoUrl) {
+    body.video_url = videoUrl;
+  } else {
+    throw new Error('Must provide video_id, video_url, or conversation_id');
+  }
+  
+  const response = await fetch('/api/v2/chat/video', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(body)
+  });
+  
+  if (!response.ok) {
+    throw new Error(/* handle error */);
+  }
+  
+  const data = await response.json();
+  
+  // ⚠️ Store conversation_id from response
+  if (data.conversation_id && !chatState.conversationId) {
+    chatState.conversationId = data.conversation_id;
+    chatState.videoId = data.video_id;
+  }
+  
+  // Update messages
+  chatState.messages.push(
+    { role: 'user', content: query, message_index: data.message_index - 1 },
+    { role: 'assistant', content: data.assistant_message, message_index: data.message_index }
+  );
+  
+  return data;
+}
+```
+
+---
+
+## Performance Notes
+
+**First video embedding:** ~10-30 seconds (fetch transcript, embed chunks)
+- Show: "Processing video transcript..."
+
+**Subsequent requests:** <1 second (video already embedded)
+- Show: "Thinking..."
+
+**Agent timeout:** 60 seconds
+- Show timeout message if query takes too long
+
+---
+
+## Summary
+
+### What Exists
+- ✅ `/api/v2/chat/video` - Per-video conversations
+- ✅ `/api/v2/chat/general` - Cross-video queries
+- ✅ `/api/auth/login` - Authentication
+- ✅ `/me` - User info
+- ✅ `/health` - Health check
+
+### Key Rules
+1. **ALWAYS store `conversation_id` from first response**
+2. **ALWAYS include `conversation_id` in follow-up requests**
+3. **Each video gets its own conversation**
+4. **Query limit: 2000 characters**
+5. **Messages are paired (user + assistant per turn)**
+
+---
+
+**End of Reference Guide**

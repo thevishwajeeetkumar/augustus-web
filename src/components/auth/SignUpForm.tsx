@@ -9,16 +9,14 @@ import { Button } from "@/components/ui/button";
 type SignupOk = { ok: true; user?: unknown };
 type SignupErr = { error: string };
 type SignupResponse = SignupOk | SignupErr;
-
 export function SignUpForm({ onSuccessRedirect = "/auth/sign-in" }: { onSuccessRedirect?: string }) {
   const router = useRouter();
-
   const [username, setUsername] = React.useState("");
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
-
+  
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
