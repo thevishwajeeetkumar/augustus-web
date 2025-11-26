@@ -29,7 +29,7 @@ export function MessageList({ messages, className }: Props) {
     <div
       ref={scrollRef}
       className={cn(
-        "flex-1 space-y-4 overflow-y-auto pr-1 text-sm text-white/80",
+        "h-full space-y-4 overflow-y-auto pr-2 text-sm text-white/80 scrollbar-thin",
         className
       )}
     >

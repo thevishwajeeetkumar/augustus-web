@@ -5,130 +5,245 @@ import { MessageList, type ChatMessage } from "./MessageList";
 import { MessageComposer } from "./MessageComposer";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/app/hooks/useAuth";
-
-type AgentResponse = {
-  answer: string;
-  session_id: string;
-  video_context?: string;
-  tool_name?: string; // if backend returns it
-};
+import { chatVideo, chatGeneral } from "@/lib/api";
+import type { ConversationResponse } from "@/lib/types";
+import { saveConversation, updateConversation } from "@/lib/storage";
 
 type Props = {
-  initialSessionId: string;
-  videoId: string;
+  conversationId?: string | null; // Optional now - can be null for new conversations
+  videoId?: string | null; // For new conversations
+  videoUrl?: string | null; // Alternative to videoId
+  videoTitle?: string;
+  isGeneral?: boolean; // true for General tab
   initialMessages?: ChatMessage[];
+  initialQuery?: string | null; // Auto-send this query on mount if no conversationId
+  onConversationCreated?: (conversationId: string, response: ConversationResponse) => void;
+  onMessageSent?: (response: ConversationResponse) => void; // Pass response for updates
 };
 
-export function ChatPanel({ initialSessionId, videoId, initialMessages = [] }: Props) {
+export function ChatPanel({ 
+  conversationId: initialConversationId,
+  videoId,
+  videoUrl,
+  videoTitle,
+  isGeneral = false,
+  initialMessages = [],
+  initialQuery,
+  onConversationCreated,
+  onMessageSent,
+}: Props) {
   const { signOut } = useAuth();
-  const [sessionId, setSessionId] = React.useState(initialSessionId);
   const [messages, setMessages] = React.useState<ChatMessage[]>(initialMessages);
+  const [conversationId, setConversationId] = React.useState<string | null>(initialConversationId || null);
+  const [currentVideoTitle, setCurrentVideoTitle] = React.useState(videoTitle || "");
+  const [currentVideoId, setCurrentVideoId] = React.useState(videoId || "");
   const [busy, setBusy] = React.useState(false);
+  const [processingVideo, setProcessingVideo] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  const [hasAutoSent, setHasAutoSent] = React.useState(false);
+  const lastAutoSentQuery = React.useRef<string | null>(null);
+
+  // Sync initialMessages when they change - important for loading conversation history
+  React.useEffect(() => {
+    // Always sync when initialMessages changes (parent is loading conversation)
+    if (initialMessages) {
+      console.log("ChatPanel: Updating messages from initialMessages:", initialMessages.length);
+      setMessages(initialMessages);
+    }
+  }, [initialMessages]);
+
+  // Sync conversationId prop
+  React.useEffect(() => {
+    if (initialConversationId) {
+      setConversationId(initialConversationId);
+      // Reset auto-send flag when conversation changes
+      if (initialConversationId !== conversationId) {
+        setHasAutoSent(false);
+        lastAutoSentQuery.current = null;
+      }
+    }
+  }, [initialConversationId, conversationId]);
+
+  // Auto-send initial query if provided and no conversation exists
+  // Only send once per unique query to prevent duplicate calls
+  React.useEffect(() => {
+    if (
+      initialQuery && 
+      !conversationId && 
+      !hasAutoSent && 
+      !busy && 
+      !processingVideo &&
+      lastAutoSentQuery.current !== initialQuery // Prevent duplicate sends of same query
+    ) {
+      console.log("ChatPanel: Auto-sending initial query:", initialQuery);
+      setHasAutoSent(true);
+      lastAutoSentQuery.current = initialQuery;
+      
+      // Use setTimeout to avoid calling during render
+      const timeoutId = setTimeout(() => {
+        void sendToAgent(initialQuery);
+      }, 100); // Small delay to ensure component is fully mounted
+      
+      // Cleanup timeout if component unmounts
+      return () => {
+        clearTimeout(timeoutId);
+      };
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialQuery, conversationId, hasAutoSent, busy, processingVideo]);
 
   async function sendToAgent(prompt: string) {
     setError(null);
-    const humanMsg: ChatMessage = {
-      id: `m_${Date.now()}`,
+    
+    // Optimistic UI update
+    const tempUserMsg: ChatMessage = {
+      id: `temp_${Date.now()}`,
       role: "human",
       content: prompt,
       createdAt: new Date().toISOString(),
     };
-    setMessages((m) => [...m, humanMsg]);
-    setBusy(true);
+    setMessages((m) => [...m, tempUserMsg]);
+    
+    // Determine if this is first message (video processing)
+    const isFirstMessage = !conversationId;
+    if (isFirstMessage) {
+      setProcessingVideo(true);
+    } else {
+      setBusy(true);
+    }
 
     try {
-      const res = await fetch("/api/agent/query", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query: prompt, session_id: sessionId }),
-        credentials: "include",
-      });
+      let response: ConversationResponse;
 
-      const data = (await res.json()) as AgentResponse | { error: string; detail?: string };
-
-      if (!res.ok) {
-        // Handle 401 - session expired
-        if (res.status === 401) {
-          const msg = ("error" in data && data.error) || "Session expired. Please sign in again.";
-          setError(msg);
-          setMessages((m) => [
-            ...m,
-            {
-              id: `e_${Date.now()}`,
-              role: "ai",
-              content: `⚠️ ${msg}`,
-              createdAt: new Date().toISOString(),
-            },
-          ]);
-          // Redirect to sign-in after a delay
-          setTimeout(() => {
-            signOut();
-          }, 2000);
-          return;
+      if (isGeneral) {
+        // Use General tab endpoint
+        response = await chatGeneral({
+          conversation_id: conversationId || undefined,
+          query: prompt,
+        });
+      } else {
+        // Use Video tab endpoint
+        const request: any = { query: prompt };
+        
+        if (conversationId) {
+          request.conversation_id = conversationId;
+        } else if (videoUrl) {
+          request.video_url = videoUrl;
+        } else if (videoId) {
+          request.video_id = videoId;
+        } else {
+          throw new Error("Must provide conversation_id, video_url, or video_id");
         }
 
-        // Handle other errors - backend uses {"detail": "message"} format
-        const msg = "detail" in data && data.detail 
-          ? data.detail 
-          : "error" in data && data.error 
-          ? data.error 
-          : `Request failed (status ${res.status}).`;
-        setError(msg);
-        // Show an inline AI error bubble for continuity
+        response = await chatVideo(request);
+      }
+
+      // Store conversation_id if this was first message
+      if (!conversationId && response.conversation_id) {
+        setConversationId(response.conversation_id);
+        
+        // Update video info from response
+        setCurrentVideoTitle(response.video_title);
+        setCurrentVideoId(response.video_id);
+
+        // Notify parent
+        if (onConversationCreated) {
+          onConversationCreated(response.conversation_id, response);
+        }
+      }
+
+      // Convert ConversationResponse to ChatMessage format
+      const userMsg: ChatMessage = {
+        id: `user_${response.message_index - 1}`,
+        role: "human",
+        content: response.user_message,
+        createdAt: response.created_at,
+      };
+      const aiMsg: ChatMessage = {
+        id: `ai_${response.message_index}`,
+        role: "ai",
+        content: response.assistant_message,
+        createdAt: response.created_at,
+      };
+
+      // Replace temporary message with real messages
+      setMessages((m) => {
+        const filtered = m.filter((msg) => msg.id !== tempUserMsg.id);
+        return [...filtered, userMsg, aiMsg];
+      });
+
+      // Save/update conversation in localStorage
+      if (response.conversation_id) {
+        const storedConv = {
+          conversation_id: response.conversation_id,
+          video_id: response.video_id,
+          video_title: response.video_title,
+          last_message_at: response.created_at,
+          message_count: response.message_index + 1, // +1 because index is 0-based
+          last_user_message: response.user_message,
+          last_assistant_message: response.assistant_message,
+        };
+
+        if (conversationId) {
+          updateConversation(response.conversation_id, storedConv);
+        } else {
+          saveConversation(storedConv);
+        }
+      }
+
+      // Notify parent
+      if (onMessageSent) {
+        onMessageSent(response);
+      }
+    } catch (err) {
+      // Remove temporary message on error
+      setMessages((m) => m.filter((msg) => msg.id !== tempUserMsg.id));
+
+      const errorMsg = err instanceof Error ? err.message : "Network error. Please try again.";
+      setError(errorMsg);
+
+      // Handle specific error cases
+      if (errorMsg.includes("401") || errorMsg.includes("Unauthorized")) {
         setMessages((m) => [
           ...m,
           {
             id: `e_${Date.now()}`,
             role: "ai",
-            content: `⚠️ ${msg}`,
+            content: "⚠️ Session expired. Please sign in again.",
             createdAt: new Date().toISOString(),
           },
         ]);
+        setTimeout(() => {
+          signOut();
+        }, 2000);
         return;
       }
 
-      if ("error" in data) {
-        const msg = data.error;
-        setError(msg);
-        setMessages((m) => [
-          ...m,
-          {
-            id: `e_${Date.now()}`,
-            role: "ai",
-            content: `⚠️ ${msg}`,
-            createdAt: new Date().toISOString(),
-          },
-        ]);
-        return;
+      if (errorMsg.includes("404") && conversationId) {
+        // Conversation not found - clear it and retry as new
+        setConversationId(null);
+        setError("Conversation not found. Starting new conversation...");
+        // Could auto-retry here, but for now just show error
       }
 
-      setSessionId(data.session_id); // in case backend rotated/updated it
-      setMessages((m) => [
-        ...m,
-        {
-          id: `a_${Date.now()}`,
-          role: "ai",
-          content: data.answer,
-          tool_name: (data as { tool_name?: string }).tool_name ?? undefined,
-          createdAt: new Date().toISOString(),
-        },
-      ]);
-    } catch {
-      setError("Network error. Please try again.");
+      // Show error message
       setMessages((m) => [
         ...m,
         {
           id: `e_${Date.now()}`,
           role: "ai",
-          content: "⚠️ Network error. Please try again.",
+          content: `⚠️ ${errorMsg}`,
           createdAt: new Date().toISOString(),
         },
       ]);
     } finally {
       setBusy(false);
+      setProcessingVideo(false);
     }
   }
+
+  const displayTitle = currentVideoTitle || videoTitle || (isGeneral ? "General" : "New Chat");
+  const displayVideoId = currentVideoId || videoId || (isGeneral ? "GENERAL" : "");
 
   return (
     <div className="relative flex h-full flex-col overflow-hidden rounded-3xl border border-white/12 bg-[#0b1120]/75 shadow-[0_26px_85px_rgba(12,18,45,0.55)]">
@@ -137,30 +252,35 @@ export function ChatPanel({ initialSessionId, videoId, initialMessages = [] }: P
         <div className="flex items-center justify-between border-b border-white/12 px-6 py-4">
           <div>
             <p className="text-[11px] uppercase tracking-[0.25em] text-white/45">
-              Active session
+              {displayTitle}
             </p>
-            <div className="mt-1 flex items-center gap-2 text-sm text-white">
-              <span className="rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs text-white/75">
-                Video {videoId}
-              </span>
-              <span className="text-xs text-white/45">Session {sessionId.slice(0, 8)}…</span>
-            </div>
+            {displayVideoId && (
+              <div className="mt-1 flex items-center gap-2 text-sm text-white">
+                <span className="rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs text-white/75">
+                  {displayVideoId}
+                </span>
+              </div>
+            )}
           </div>
           <div
             className={cn(
               "rounded-full border px-3 py-1 text-[11px] uppercase tracking-wide",
-              busy
+              processingVideo
+                ? "border-blue-500/40 bg-blue-500/15 text-blue-200"
+                : busy
                 ? "border-amber-500/40 bg-amber-500/15 text-amber-200"
                 : "border-emerald-500/35 bg-emerald-500/12 text-emerald-200"
             )}
           >
-            {busy ? "Thinking…" : "Ready"}
+            {processingVideo ? "Processing video…" : busy ? "Thinking…" : "Ready"}
           </div>
         </div>
-        <div className="flex h-full flex-col gap-4 px-5 py-5">
-          <MessageList messages={messages} />
-          <div className="space-y-3">
-            <MessageComposer disabled={busy} onSend={sendToAgent} />
+        <div className="flex h-full min-h-0 flex-col gap-4 px-5 py-5">
+          <div className="flex-1 min-h-0 overflow-y-auto">
+            <MessageList messages={messages} />
+          </div>
+          <div className="flex-shrink-0 space-y-3">
+            <MessageComposer disabled={busy || processingVideo} onSend={sendToAgent} />
             {error ? (
               <div className="flex items-center rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs text-red-200">
                 {error}

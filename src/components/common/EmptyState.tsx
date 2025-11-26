@@ -1,9 +1,11 @@
+import * as React from "react";
+
 type Props = {
-    title?: string;
-    description?: string;
-    action?: React.ReactNode;
-  };
-  
+  title?: string;
+  description?: string;
+  action?: React.ReactNode;
+};
+
 export function EmptyState({
   title = "Nothing here yet",
   description = "Get started by adding your first item.",
