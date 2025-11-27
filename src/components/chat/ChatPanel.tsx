@@ -6,7 +6,7 @@ import { MessageComposer } from "./MessageComposer";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/app/hooks/useAuth";
 import { chatVideo, chatGeneral } from "@/lib/api";
-import type { ConversationResponse } from "@/lib/types";
+import type { ConversationResponse, VideoChatRequest } from "@/lib/types";
 import { saveConversation, updateConversation } from "@/lib/storage";
 
 type Props = {
@@ -123,7 +123,7 @@ export function ChatPanel({
         });
       } else {
         // Use Video tab endpoint
-        const request: any = { query: prompt };
+        const request: VideoChatRequest = { query: prompt };
         
         if (conversationId) {
           request.conversation_id = conversationId;

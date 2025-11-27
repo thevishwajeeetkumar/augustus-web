@@ -8,7 +8,6 @@ import { GeneralForm } from "@/components/general/GeneralForm";
 import { EmptyState } from "@/components/common/EmptyState";
 import type { StoredConversation, ConversationResponse } from "@/lib/types";
 import type { ChatMessage } from "@/components/chat/MessageList";
-import { useAuth } from "@/app/hooks/useAuth";
 import { getStoredConversations, saveConversation, updateConversation } from "@/lib/storage";
 import { fetchConversationMessages } from "@/lib/api";
 import type { ConversationMessage } from "@/lib/types";
@@ -18,7 +17,6 @@ import { Video, Globe } from "lucide-react";
 type ActiveTab = "video" | "general";
 
 export default function QueryPage() {
-  const { signOut } = useAuth();
   const [conversations, setConversations] = React.useState<StoredConversation[]>([]);
   const [activeTab, setActiveTab] = React.useState<ActiveTab>("video");
   
@@ -108,7 +106,6 @@ export default function QueryPage() {
     }
     
     void loadInitialConversation();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function handleSelectConversation(conversationId: string) {
