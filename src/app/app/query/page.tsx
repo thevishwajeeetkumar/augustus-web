@@ -12,13 +12,14 @@ import { getStoredConversations, saveConversation, updateConversation } from "@/
 import { fetchConversationMessages } from "@/lib/api";
 import type { ConversationMessage } from "@/lib/types";
 import { cn } from "@/lib/utils";
-import { Video, Globe } from "lucide-react";
+import { Video, Globe, Menu, X } from "lucide-react";
 
 type ActiveTab = "video" | "general";
 
 export default function QueryPage() {
   const [conversations, setConversations] = React.useState<StoredConversation[]>([]);
   const [activeTab, setActiveTab] = React.useState<ActiveTab>("video");
+  const [mobileSidebarOpen, setMobileSidebarOpen] = React.useState(false);
   
   // Separate conversation IDs for video and general tabs
   const [videoConversationId, setVideoConversationId] = React.useState<string | null>(null);
@@ -130,6 +131,7 @@ export default function QueryPage() {
       setVideoConversationId(conversationId);
       setActiveTab("video");
     }
+    setMobileSidebarOpen(false);
 
     // Then fetch message history for the selected conversation
     try {
@@ -172,6 +174,7 @@ export default function QueryPage() {
       setGeneralConversationId(null);
       setGeneralMessages([]);
     }
+    setMobileSidebarOpen(false);
   }
 
   function handleConversationCreated(conversationId: string, response: ConversationResponse) {
@@ -329,17 +332,42 @@ export default function QueryPage() {
     });
   }, [activeTab, showNewChatForm, videoConversationId, newChatVideoUrl, newChatVideoQuery, generalConversationId, newChatGeneralQuery, shouldShowVideoForm, shouldShowGeneralForm, shouldShowChatPanel]);
 
+  const mobileHeader = (
+    <div className="sticky top-0 z-40 flex items-center justify-between border-b border-white/10 bg-[#050914]/95 px-4 py-3 backdrop-blur lg:hidden">
+      <button
+        onClick={() => setMobileSidebarOpen((prev) => !prev)}
+        className="rounded-lg border border-white/10 p-2 text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
+        aria-label="Toggle conversations"
+      >
+        {mobileSidebarOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+      </button>
+      <div className="text-sm font-semibold text-white/80">Conversations</div>
+      <button
+        onClick={handleNewChatClick}
+        className="rounded-lg border border-white/20 bg-white/10 px-3 py-2 text-xs font-semibold text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
+      >
+        New chat
+      </button>
+    </div>
+  );
+
   return (
-    <div className="flex h-screen flex-col overflow-hidden">
+    <div className="relative flex min-h-screen flex-col overflow-hidden bg-[#030818]">
       <div className="pointer-events-none absolute inset-0">
         <div className="absolute top-0 left-0 h-px w-full bg-linear-to-r from-transparent via-white/15 to-transparent" />
         <div className="absolute -top-28 left-1/2 h-[420px] w-[420px] -translate-x-1/2 bg-[radial-gradient(circle,rgba(95,139,255,0.24),transparent_70%)] blur-[120px]" />
         <div className="absolute bottom-[-30%] right-[16%] h-[360px] w-[360px] rounded-full bg-[radial-gradient(circle,rgba(122,93,255,0.2),transparent_70%)] blur-[110px]" />
       </div>
-      
-      <div className="relative z-10 flex h-full">
+
+      <div className="relative z-10 flex min-h-screen flex-col lg:flex-row">
+        {mobileHeader}
         {/* Sidebar */}
-        <div className="w-80 flex-shrink-0">
+        <div
+          className={cn(
+            "fixed bottom-0 left-0 top-16 z-30 w-72 transform bg-[#0a0f1e]/95 shadow-2xl transition-transform duration-300 lg:relative lg:top-0 lg:z-0 lg:w-80 lg:translate-x-0",
+            mobileSidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
+          )}
+        >
           <ConversationSidebar
             conversations={displayConversations}
             selectedConversationId={currentConversationId}
@@ -348,11 +376,18 @@ export default function QueryPage() {
             isLoading={false}
           />
         </div>
+        {mobileSidebarOpen && (
+          <div
+            className="fixed bottom-0 left-0 right-0 top-16 z-20 bg-black/60 lg:hidden"
+            onClick={() => setMobileSidebarOpen(false)}
+            aria-hidden="true"
+          />
+        )}
 
         {/* Main chat area */}
         <div className="relative z-10 flex flex-1 flex-col overflow-hidden">
           {/* Tab Switcher */}
-          <div className="flex items-center gap-2 border-b border-white/10 bg-[#0a0f1e]/95 px-6 py-3">
+          <div className="flex flex-wrap items-center gap-2 border-b border-white/10 bg-[#0a0f1e]/95 px-4 py-3 lg:px-6">
             <button
               onClick={() => handleTabSwitch("video")}
               className={cn(
@@ -377,23 +412,28 @@ export default function QueryPage() {
               <Globe className="h-4 w-4" />
               <span>General</span>
             </button>
+            <div className="ml-auto hidden lg:block">
+              <button
+                onClick={handleNewChatClick}
+                className="rounded-lg border border-white/20 bg-white/10 px-4 py-2 text-sm font-semibold text-white transition hover:border-white/30 hover:bg-white/20"
+              >
+                New chat
+              </button>
+            </div>
           </div>
 
           {/* Content Area */}
-          <div className="flex-1 overflow-hidden">
+          <div className="flex-1 overflow-y-auto">
             {shouldShowVideoForm ? (
-              <div className="flex h-full flex-col items-center justify-center p-8">
+              <div className="flex h-full flex-col overflow-y-auto p-4 sm:p-8">
                 <div className="w-full max-w-2xl">
-                  <div className="mb-6 text-center">
-                    <h1 className="text-3xl font-semibold text-white">New Chat</h1>
-                    <p className="mt-2 text-sm text-white/65">
-                      Start a conversation about a YouTube video
+                  <div className="mb-6 text-left sm:text-center">
+                    <h1 className="text-2xl font-semibold text-white sm:text-3xl">New chat</h1>
+                    <p className="mt-2 text-sm text-white/70">
+                      Start a conversation about a YouTube video.
                     </p>
                   </div>
-                  <VideoUrlForm
-                    initialQuery=""
-                    onSuccess={handleVideoUrlFormSuccess}
-                  />
+                  <VideoUrlForm initialQuery="" onSuccess={handleVideoUrlFormSuccess} />
                   {error && (
                     <div className="mt-4 rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-200">
                       {error}
@@ -402,18 +442,15 @@ export default function QueryPage() {
                 </div>
               </div>
             ) : shouldShowGeneralForm ? (
-              <div className="flex h-full flex-col items-center justify-center p-8">
+              <div className="flex h-full flex-col overflow-y-auto p-4 sm:p-8">
                 <div className="w-full max-w-2xl">
-                  <div className="mb-6 text-center">
-                    <h1 className="text-3xl font-semibold text-white">New Chat</h1>
-                    <p className="mt-2 text-sm text-white/65">
-                      Ask questions across all your videos
+                  <div className="mb-6 text-left sm:text-center">
+                    <h1 className="text-2xl font-semibold text-white sm:text-3xl">New chat</h1>
+                    <p className="mt-2 text-sm text-white/70">
+                      Ask questions across every processed video.
                     </p>
                   </div>
-                  <GeneralForm
-                    initialQuery=""
-                    onSuccess={handleGeneralFormSuccess}
-                  />
+                  <GeneralForm initialQuery="" onSuccess={handleGeneralFormSuccess} />
                   {error && (
                     <div className="mt-4 rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-200">
                       {error}
@@ -422,7 +459,7 @@ export default function QueryPage() {
                 </div>
               </div>
             ) : shouldShowChatPanel ? (
-              <div className="flex h-full flex-col p-6">
+              <div className="flex h-full flex-col p-4 sm:p-6">
                 {loadingMessages ? (
                   <div className="flex h-full items-center justify-center">
                     <div className="text-center">
@@ -433,16 +470,20 @@ export default function QueryPage() {
                 ) : (
                   <ChatPanel
                     conversationId={currentConversationId}
-                    videoId={activeTab === "video" && newChatVideoUrl ? undefined : (selectedConversation?.video_id || undefined)}
+                    videoId={
+                      activeTab === "video" && newChatVideoUrl
+                        ? undefined
+                        : selectedConversation?.video_id || undefined
+                    }
                     videoUrl={activeTab === "video" && newChatVideoUrl ? newChatVideoUrl : undefined}
                     videoTitle={selectedConversation?.video_title}
                     isGeneral={activeTab === "general"}
                     initialMessages={currentMessages}
                     initialQuery={
-                      activeTab === "general" && newChatGeneralQuery 
-                        ? newChatGeneralQuery 
-                        : activeTab === "video" && newChatVideoQuery 
-                        ? newChatVideoQuery 
+                      activeTab === "general" && newChatGeneralQuery
+                        ? newChatGeneralQuery
+                        : activeTab === "video" && newChatVideoQuery
+                        ? newChatVideoQuery
                         : null
                     }
                     onConversationCreated={handleConversationCreated}
@@ -456,12 +497,12 @@ export default function QueryPage() {
                 )}
               </div>
             ) : (
-              <div className="flex h-full items-center justify-center">
+              <div className="flex h-full items-center justify-center p-6">
                 <EmptyState
                   title="No conversation selected"
-                  description="Select a conversation from the sidebar or start a new chat"
+                  description="Select a conversation from the list or start a new chat."
                 />
-            </div>
+              </div>
             )}
           </div>
         </div>
