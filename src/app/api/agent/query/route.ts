@@ -253,6 +253,7 @@ export async function POST(req: Request) {
       // The backend should NOT return a redirect URL in the JSON response
       if ("url" in backendResponse) {
         console.warn("Backend returned unexpected 'url' field. Removing it from response. URL was:", backendResponse.url);
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
         const { url: _url, ...cleanResponse } = backendResponse;
         return NextResponse.json(cleanResponse, { status: 200 });
       }

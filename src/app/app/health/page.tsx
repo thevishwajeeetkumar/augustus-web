@@ -1,5 +1,14 @@
+// Force dynamic rendering to prevent build-time fetch
+export const dynamic = 'force-dynamic';
+
 async function getHealth() {
-    const res = await fetch(`${process.env.NEXT_PUBLIC_SITE_URL ?? ""}/api/health`, {
+  try {
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || '';
+    if (!siteUrl) {
+      return { ok: false, data: { error: "NEXT_PUBLIC_SITE_URL not configured" } };
+    }
+    
+    const res = await fetch(`${siteUrl}/api/health`, {
       cache: "no-store",
     });
     try {
@@ -8,7 +17,15 @@ async function getHealth() {
     } catch {
       return { ok: false, data: { error: "Invalid response from /api/health" } };
     }
+  } catch (err) {
+    return { 
+      ok: false, 
+      data: { 
+        error: err instanceof Error ? err.message : "Failed to fetch health status" 
+      } 
+    };
   }
+}
   
 export default async function HealthPage() {
   const { ok, data } = await getHealth();
